@@ -159,14 +159,32 @@ runs:
           --data @credentials.json \
           http://vault.127.0.0.1.nip.io/v1/secret/dev
         
-        # Create a secret for Merlin with information on how to access Vault
         kubectl create secret generic vault-secret \
           --from-literal=vault-address=http://vault:8200 \
           --from-literal=vault-token=${{ env.VAULT_TOKEN }}
 
+        # FOR TURING
+        # Create a secret for Merlin with information on how to access Vault
+        k3d kubeconfig get ${{ inputs.CLUSTER_NAME }} >/tmp/temp_kubeconfig.yaml
+        tee credentials.json << EOF
+        {
+            "k8s_config": {
+                "name": $(yq .clusters[0].name -o json /tmp/temp_kubeconfig.yaml),
+                "cluster": $(yq '.clusters[0].cluster | .server = "https://kubernetes.default.svc.cluster.local:443"' -o json /tmp/temp_kubeconfig.yaml),
+                "user": $(yq .users[0].user -o json /tmp/temp_kubeconfig.yaml)
+            }
+        }
+        EOF
+        # get yaml file
+        yq e -P credentials.json -o yaml >/tmp/temp_k8sconfig.yaml
+
     - name: Install Turing
       shell: bash
       run: |
+        if [[ ${{inputs.use_in_cluster_config}} == false ]]; then
+          yq '.turing.environmentConfigs.[0].k8s_config |= load("/tmp/temp_k8sconfig.yaml").k8s_config | .turing.environmentConfigs.[0].name |= load("infra/e2e/${{ inputs.values_file }}").merlin.environmentConfigs.[0].name' -i infra/e2e/${{ inputs.values_file }}
+          yq '.turing.config.ClusterConfig.EnsemblingServiceK8sConfig |= load("/tmp/temp_k8sconfig.yaml").k8s_config' -i infra/e2e/${{ inputs.values_file }}
+        fi
         helm install turing ./infra/charts/turing \
           --values infra/e2e/turing.values.yaml \
           --values infra/e2e/${{ inputs.values_file }} \
@@ -196,6 +214,7 @@ runs:
     - name: Kubernetes namespace report
       uses: jupyterhub/action-k8s-namespace-report@v1
       if: ${{ failure() }}
+
 
     - name: Setup MLP project
       shell: bash

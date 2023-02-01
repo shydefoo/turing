@@ -225,9 +225,8 @@ RouterDefaults:
   Image: localhost:5000/turing-router
 ClusterConfig:
   InClusterConfig: false
-  VaultConfig:
-    Address: http://localhost:8200
-    Token: root
+  EnvironmentConfigPath: ""
+  EnsemblingServiceK8sConfig: {}
 TuringEncryptionKey: password
 MLPConfig:
   MerlinURL: http://localhost:8082/v1
@@ -243,10 +242,17 @@ OpenapiConfig:
     ServingDirectory: api/swagger-ui-dist
     ServingPath: /api-docs/
 ```
+Before we can start turing, we need to get the credentials of the K3d cluster created in the docker-compose step. 
+```
+sh ../infra/docker-compose/dev/extract_creds.sh
+```
+This script will create 2 new files containing the credentials required to configure turing with:
+* config-dev-w-creds.yaml
+* environments-dev-w-creds.yaml
 
 Now, start Turing API server with `go run` command,
 ```bash
-go run turing/cmd/main.go -config=config-dev.yaml
+go run turing/cmd/main.go -config=config-dev-w-creds.yaml
 ```
 
 We will create a new router with name `router1`. This router specifies [httpbin](http://httpbin.org/anything) as
